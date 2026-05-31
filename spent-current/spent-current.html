@@ -42,8 +42,7 @@
     <div id="title">Spent Current</div>
     <div id="subtitle">Light spills where your hand has been.</div>
   </div>
-  <div id="closing" class="layer">Nothing returns to where it started.</div>
-  <div id="credit" class="corner">Spent Current<br>stir it; it will not un-stir</div>
+  <div id="credit" class="corner">Spent Current</div>
   <div id="hint" class="corner">drag to stir the water</div>
 
 <script>
@@ -299,12 +298,10 @@ window.addEventListener("resize", () => { clearTimeout(rsT); rsT = setTimeout(re
 /* ---------------- words ---------------- */
 function reveal() {
   const tw = document.getElementById("title-wrap");
-  const cl = document.getElementById("closing");
   const hn = document.getElementById("hint");
   setTimeout(() => { tw.style.opacity = "1"; }, 500);
   setTimeout(() => { hn.style.opacity = "1"; }, 1500);
-  setTimeout(() => { tw.style.opacity = "0"; }, 5200);
-  setTimeout(() => { cl.style.opacity = "0.7"; }, 6400);
+  setTimeout(() => { tw.style.opacity = "0"; }, 5000);
   setTimeout(() => { hn.style.opacity = "0"; }, 9000);
 }
 
