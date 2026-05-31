@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Spent Current</title>
+<meta name="theme-color" content="#0a0d12">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #dfe7ef; --ink-dim: rgba(223,231,239,0.6); --ink-faint: rgba(223,231,239,0.32); }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #0a0d12; overflow: hidden; color: var(--ink);
+    font-family: 'Fraunces', Georgia, serif;
+    touch-action: none; overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+    cursor: crosshair;
+  }
+  #stage { display: block; position: fixed; inset: 0; }
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 2;
+    background: radial-gradient(125% 95% at 50% 50%, transparent 55%, rgba(4,6,10,0.6) 100%);
+  }
+  .layer { position: fixed; pointer-events: none; z-index: 3; width: 100%; text-align: center; }
+  #title-wrap { top: 42%; transform: translateY(-50%); opacity: 0; transition: opacity 2.2s ease; }
+  #title { font-weight: 300; font-size: clamp(2.4rem, 8vw, 4.6rem); letter-spacing: 0.04em; text-shadow: 0 0 40px rgba(26,143,227,0.4); }
+  #subtitle { margin-top: 1.1rem; font-style: italic; font-weight: 300; font-size: clamp(0.95rem, 2.4vw, 1.25rem); color: var(--ink-dim); }
+  #closing { left: 0; right: 0; bottom: 7.5%; opacity: 0; transition: opacity 3s ease; font-style: italic; font-weight: 300; font-size: clamp(0.85rem, 2vw, 1.05rem); color: var(--ink-dim); }
+  .corner { position: fixed; z-index: 3; pointer-events: none; font-family: 'Inter', system-ui, sans-serif; font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-faint); }
+  #credit { left: 22px; bottom: 16px; text-align: left; line-height: 1.7; }
+  #hint { right: 22px; bottom: 16px; text-align: right; line-height: 1.7; opacity: 0; transition: opacity 1.6s ease; }
+  @media (max-width: 600px) { #credit, #hint { font-size: 0.54rem; letter-spacing: 0.12em; } }
+</style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div class="vignette"></div>
+  <div id="title-wrap" class="layer">
+    <div id="title">Spent Current</div>
+    <div id="subtitle">Light spills where your hand has been.</div>
+  </div>
+  <div id="closing" class="layer">Nothing returns to where it started.</div>
+  <div id="credit" class="corner">Spent Current<br>stir it; it will not un-stir</div>
+  <div id="hint" class="corner">drag to stir the water</div>
+
+<script>
+"use strict";
+
+/* palette by a flock; the fluid built by hand */
+const PALETTE = { bg: "#0a0d12", inks: ["#00c9a7", "#7b5ea7", "#e8a045", "#1a8fe3"], accent: "#4a5568" };
+function hexToRgb(h) { const m = /^#?([0-9a-f]{6})$/i.exec(h); const n = m ? parseInt(m[1], 16) : 0; return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
+const BG = hexToRgb(PALETTE.bg);
+const INKS = PALETTE.inks.map(h => { const c = hexToRgb(h); return { r: c.r / 255, g: c.g / 255, b: c.b / 255 }; });
+
+/* ---------------- stable-fluids solver (Jos Stam), with vorticity ---------------- */
+const REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const DT = 0.15, ITER = 6, VORT = 10.0, DENSDECAY = 0.990, VELDAMP = 0.998, K = 220;
+const FORCE = 5.0, INKAMT = 0.7, BURST = 9.0;
+
+let N = 96, size = 0, W = 0, H = 0, DPR = 1, RAD = 3;
+let u, v, u0, v0, r, g, b, r0, g0, b0, curlArr;
+let sU, sV, sR, sG, sB; // per-frame input sources
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d", { alpha: false });
+let offscreen, octx, imgData;
+
+const IX = (i, j) => i + (N + 2) * j;
+
+function alloc() {
+  size = (N + 2) * (N + 2);
+  const f = () => new Float32Array(size);
+  u = f(); v = f(); u0 = f(); v0 = f();
+  r = f(); g = f(); b = f(); r0 = f(); g0 = f(); b0 = f();
+  curlArr = f();
+  sU = f(); sV = f(); sR = f(); sG = f(); sB = f();
+  offscreen = document.createElement("canvas");
+  offscreen.width = N; offscreen.height = N;
+  octx = offscreen.getContext("2d");
+  imgData = octx.createImageData(N, N);
+}
+
+function set_bnd(b_, x) {
+  for (let i = 1; i <= N; i++) {
+    x[IX(0, i)]     = b_ === 1 ? -x[IX(1, i)] : x[IX(1, i)];
+    x[IX(N + 1, i)] = b_ === 1 ? -x[IX(N, i)] : x[IX(N, i)];
+    x[IX(i, 0)]     = b_ === 2 ? -x[IX(i, 1)] : x[IX(i, 1)];
+    x[IX(i, N + 1)] = b_ === 2 ? -x[IX(i, N)] : x[IX(i, N)];
+  }
+  x[IX(0, 0)]         = 0.5 * (x[IX(1, 0)] + x[IX(0, 1)]);
+  x[IX(0, N + 1)]     = 0.5 * (x[IX(1, N + 1)] + x[IX(0, N)]);
+  x[IX(N + 1, 0)]     = 0.5 * (x[IX(N, 0)] + x[IX(N + 1, 1)]);
+  x[IX(N + 1, N + 1)] = 0.5 * (x[IX(N, N + 1)] + x[IX(N + 1, N)]);
+}
+
+function lin_solve(b_, x, x0a, a, c) {
+  const cinv = 1 / c;
+  for (let k = 0; k < ITER; k++) {
+    for (let j = 1; j <= N; j++)
+      for (let i = 1; i <= N; i++)
+        x[IX(i, j)] = (x0a[IX(i, j)] + a * (x[IX(i - 1, j)] + x[IX(i + 1, j)] + x[IX(i, j - 1)] + x[IX(i, j + 1)])) * cinv;
+    set_bnd(b_, x);
+  }
+}
+
+function project(uu, vv, p, div) {
+  for (let j = 1; j <= N; j++)
+    for (let i = 1; i <= N; i++) {
+      div[IX(i, j)] = -0.5 * (uu[IX(i + 1, j)] - uu[IX(i - 1, j)] + vv[IX(i, j + 1)] - vv[IX(i, j - 1)]) / N;
+      p[IX(i, j)] = 0;
+    }
+  set_bnd(0, div); set_bnd(0, p);
+  lin_solve(0, p, div, 1, 4);
+  for (let j = 1; j <= N; j++)
+    for (let i = 1; i <= N; i++) {
+      uu[IX(i, j)] -= 0.5 * N * (p[IX(i + 1, j)] - p[IX(i - 1, j)]);
+      vv[IX(i, j)] -= 0.5 * N * (p[IX(i, j + 1)] - p[IX(i, j - 1)]);
+    }
+  set_bnd(1, uu); set_bnd(2, vv);
+}
+
+function advect(b_, d, d0, uu, vv) {
+  const dt0 = DT * N;
+  for (let j = 1; j <= N; j++)
+    for (let i = 1; i <= N; i++) {
+      let x = i - dt0 * uu[IX(i, j)];
+      let y = j - dt0 * vv[IX(i, j)];
+      if (x < 0.5) x = 0.5; if (x > N + 0.5) x = N + 0.5;
+      if (y < 0.5) y = 0.5; if (y > N + 0.5) y = N + 0.5;
+      const i0 = x | 0, i1 = i0 + 1, j0 = y | 0, j1 = j0 + 1;
+      const s1 = x - i0, s0 = 1 - s1, t1 = y - j0, t0 = 1 - t1;
+      d[IX(i, j)] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+    }
+  set_bnd(b_, d);
+}
+
+function vorticity() {
+  for (let j = 1; j <= N; j++)
+    for (let i = 1; i <= N; i++)
+      curlArr[IX(i, j)] = 0.5 * (v[IX(i + 1, j)] - v[IX(i - 1, j)] - (u[IX(i, j + 1)] - u[IX(i, j - 1)]));
+  for (let j = 2; j <= N - 1; j++)
+    for (let i = 2; i <= N - 1; i++) {
+      const Nx = 0.5 * (Math.abs(curlArr[IX(i, j + 1)]) - Math.abs(curlArr[IX(i, j - 1)]));
+      const Ny = 0.5 * (Math.abs(curlArr[IX(i + 1, j)]) - Math.abs(curlArr[IX(i - 1, j)]));
+      const len = Math.hypot(Nx, Ny) + 1e-5;
+      const c = curlArr[IX(i, j)];
+      u[IX(i, j)] += VORT * DT * (Ny / len) * c;
+      v[IX(i, j)] += VORT * DT * (-Nx / len) * c;
+    }
+}
+
+function addSource(x, s) { for (let i = 0; i < size; i++) x[i] += DT * s[i]; }
+
+function velStep() {
+  addSource(u, sU); addSource(v, sV);
+  vorticity();
+  project(u, v, u0, v0);
+  u0.set(u); v0.set(v);
+  advect(1, u, u0, u0, v0); advect(2, v, v0, u0, v0);
+  project(u, v, u0, v0);
+  for (let i = 0; i < size; i++) { u[i] *= VELDAMP; v[i] *= VELDAMP; }
+}
+function densStep() {
+  addSource(r, sR); addSource(g, sG); addSource(b, sB);
+  r0.set(r); advect(0, r, r0, u, v);
+  g0.set(g); advect(0, g, g0, u, v);
+  b0.set(b); advect(0, b, b0, u, v);
+  for (let i = 0; i < size; i++) { r[i] *= DENSDECAY; g[i] *= DENSDECAY; b[i] *= DENSDECAY; }
+}
+
+/* ---------------- input ---------------- */
+let strokeCount = 0, curInk = INKS[0];
+let dragging = false, moved = false, lastX = 0, lastY = 0, downX = 0, downY = 0;
+
+function gridAt(px, py) { return { gi: Math.round(px / W * N), gj: Math.round(py / H * N) }; }
+
+function inject(px, py, dx, dy, col, amt, vel) {
+  const { gi, gj } = gridAt(px, py);
+  const gdx = dx * (N / W), gdy = dy * (N / H);
+  for (let oj = -RAD; oj <= RAD; oj++)
+    for (let oi = -RAD; oi <= RAD; oi++) {
+      const i = gi + oi, j = gj + oj;
+      if (i < 1 || i > N || j < 1 || j > N) continue;
+      const d2 = oi * oi + oj * oj;
+      if (d2 > RAD * RAD) continue;
+      const fall = Math.exp(-d2 / (RAD * 0.8 + 0.001));
+      const id = IX(i, j);
+      sR[id] += col.r * amt * fall; sG[id] += col.g * amt * fall; sB[id] += col.b * amt * fall;
+      sU[id] += gdx * vel * fall; sV[id] += gdy * vel * fall;
+    }
+}
+function burst(px, py, col) {
+  const { gi, gj } = gridAt(px, py);
+  const R2 = RAD + 3;
+  for (let oj = -R2; oj <= R2; oj++)
+    for (let oi = -R2; oi <= R2; oi++) {
+      const i = gi + oi, j = gj + oj;
+      if (i < 1 || i > N || j < 1 || j > N) continue;
+      const d = Math.hypot(oi, oj);
+      if (d > R2) continue;
+      const fall = 1 - d / R2;
+      const id = IX(i, j), inv = d < 0.01 ? 0 : 1 / d;
+      sR[id] += col.r * INKAMT * 1.6 * fall; sG[id] += col.g * INKAMT * 1.6 * fall; sB[id] += col.b * INKAMT * 1.6 * fall;
+      sU[id] += oi * inv * BURST * fall; sV[id] += oj * inv * BURST * fall;
+    }
+}
+
+function onDown(e) {
+  dragging = true; moved = false;
+  downX = lastX = e.clientX; downY = lastY = e.clientY;
+  curInk = INKS[(strokeCount++) % INKS.length];
+}
+function onMove(e) {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  if (Math.abs(dx) + Math.abs(dy) > 1.2) moved = true;
+  inject(e.clientX, e.clientY, dx, dy, curInk, INKAMT, FORCE);
+  lastX = e.clientX; lastY = e.clientY;
+}
+function onUp(e) {
+  if (dragging && !moved) {
+    burst(downX, downY, curInk);
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (er) {} }
+  }
+  dragging = false;
+}
+
+/* ---------------- ambient + seed ---------------- */
+let tick = 0;
+function ambient() {
+  const amb = REDUCED ? 0.015 : 0.05;
+  const t = tick * 0.012;
+  for (let j = 4; j <= N - 3; j += 3)
+    for (let i = 4; i <= N - 3; i += 3) {
+      const id = IX(i, j);
+      sU[id] += Math.sin(j * 0.18 + t) * amb;
+      sV[id] += Math.cos(i * 0.15 - t * 0.9) * amb;
+    }
+}
+function seed() {
+  const cx = W * 0.5, cy = H * 0.5;
+  inject(cx - W * 0.06, cy, 24, -6, INKS[0], INKAMT * 2.2, FORCE * 1.2);
+  inject(cx + W * 0.06, cy, -22, 8, INKS[3 % INKS.length], INKAMT * 2.2, FORCE * 1.2);
+  inject(cx, cy - H * 0.05, 4, 18, INKS[2 % INKS.length], INKAMT * 1.8, FORCE);
+}
+
+/* ---------------- render ---------------- */
+function render() {
+  const img = imgData.data;
+  for (let j = 1; j <= N; j++)
+    for (let i = 1; i <= N; i++) {
+      const id = IX(i, j);
+      const p = ((j - 1) * N + (i - 1)) * 4;
+      let R = BG.r + r[id] * K; if (R > 255) R = 255;
+      let G = BG.g + g[id] * K; if (G > 255) G = 255;
+      let B = BG.b + b[id] * K; if (B > 255) B = 255;
+      img[p] = R; img[p + 1] = G; img[p + 2] = B; img[p + 3] = 255;
+    }
+  octx.putImageData(imgData, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(offscreen, 0, 0, N, N, 0, 0, W, H);
+}
+
+/* ---------------- loop ---------------- */
+let running = true;
+function frame() {
+  if (running) {
+    tick++;
+    ambient();
+    velStep();
+    densStep();
+    sU.fill(0); sV.fill(0); sR.fill(0); sG.fill(0); sB.fill(0);
+    render();
+  }
+  requestAnimationFrame(frame);
+}
+document.addEventListener("visibilitychange", () => { running = !document.hidden; });
+
+/* ---------------- resize ---------------- */
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const minDim = Math.min(W, H);
+  N = Math.max(64, Math.min(128, Math.round(minDim / 6)));
+  RAD = Math.max(2, Math.round(N * 0.045));
+  alloc();
+  ctx.fillStyle = PALETTE.bg; ctx.fillRect(0, 0, W, H);
+  seed();
+}
+let rsT = null;
+window.addEventListener("resize", () => { clearTimeout(rsT); rsT = setTimeout(resize, 220); });
+
+/* ---------------- words ---------------- */
+function reveal() {
+  const tw = document.getElementById("title-wrap");
+  const cl = document.getElementById("closing");
+  const hn = document.getElementById("hint");
+  setTimeout(() => { tw.style.opacity = "1"; }, 500);
+  setTimeout(() => { hn.style.opacity = "1"; }, 1500);
+  setTimeout(() => { tw.style.opacity = "0"; }, 5200);
+  setTimeout(() => { cl.style.opacity = "0.7"; }, 6400);
+  setTimeout(() => { hn.style.opacity = "0"; }, 9000);
+}
+
+/* ---------------- go ---------------- */
+resize();
+reveal();
+window.addEventListener("pointerdown", onDown, { passive: true });
+window.addEventListener("pointermove", onMove, { passive: true });
+window.addEventListener("pointerup", onUp, { passive: true });
+window.addEventListener("pointercancel", onUp, { passive: true });
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

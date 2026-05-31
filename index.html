@@ -59,6 +59,7 @@
   .card:nth-child(1) { animation-delay: 0.08s; }
   .card:nth-child(2) { animation-delay: 0.20s; }
   .card:nth-child(3) { animation-delay: 0.32s; }
+  .card:nth-child(4) { animation-delay: 0.44s; }
   @keyframes rise { to { opacity: 1; transform: translateY(0); } }
 
   .card .bg { position: absolute; inset: 0; z-index: -1; transition: transform 0.7s cubic-bezier(0.2,0.7,0.2,1); }
@@ -75,6 +76,14 @@
     background:
       radial-gradient(120% 115% at 50% 98%, #c4622d 0%, #6e3414 34%, #3d1f0a 58%, #0e0b09 84%),
       #0e0b09;
+  }
+  .card--tide .bg {
+    background:
+      radial-gradient(68% 60% at 28% 34%, rgba(0,201,167,0.55) 0%, rgba(0,201,167,0) 56%),
+      radial-gradient(62% 56% at 74% 62%, rgba(123,94,167,0.52) 0%, rgba(123,94,167,0) 56%),
+      radial-gradient(56% 50% at 62% 26%, rgba(26,143,227,0.46) 0%, rgba(26,143,227,0) 52%),
+      radial-gradient(52% 46% at 38% 78%, rgba(232,160,69,0.42) 0%, rgba(232,160,69,0) 56%),
+      #0a0d12;
   }
   /* faint scrim so text always reads */
   .card::after {
@@ -159,6 +168,16 @@
           <span class="title">Only Forward</span>
           <span class="desc">An instrument that plays itself and never repeats, each note chosen from the last. Touch it, tilt it, listen. A self-portrait of living in time.</span>
           <span class="go">Listen <span class="arrow">&rarr;</span></span>
+        </span>
+      </a>
+
+      <a class="card card--tide" href="spent-current/spent-current.html">
+        <span class="bg"></span>
+        <span class="pad">
+          <span class="meta">Interactive &middot; 2026 &middot; mobile-first</span>
+          <span class="title">Spent Current</span>
+          <span class="desc">Glowing ink you stir with your hand. Mix it and it never unmixes. A self-portrait of what cannot be undone.</span>
+          <span class="go">Stir <span class="arrow">&rarr;</span></span>
         </span>
       </a>
     </nav>
