@@ -56,8 +56,11 @@ const INKS = PALETTE.inks.map(h => { const c = hexToRgb(h); return { r: c.r / 25
 
 /* ---------------- stable-fluids solver (Jos Stam), with vorticity ---------------- */
 const REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const DT = 0.15, ITER = 6, VORT = 10.0, DENSDECAY = 0.990, VELDAMP = 0.998, K = 220;
-const FORCE = 5.0, INKAMT = 0.7, BURST = 9.0;
+const DT = 0.15, ITER = 6, VORT = 10.0, DENSDECAY = 0.992, VELDAMP = 0.998;
+const FORCE = 5.0, INKAMT = 1.8, BURST = 11.0, GAIN = 3.4;
+// soft-saturation lookup: density -> 0..1, so even a light stroke reads vivid, without harsh white clipping
+const SAT = new Float32Array(513);
+for (let _i = 0; _i < 513; _i++) SAT[_i] = 1 - Math.exp(-(_i / 100) * GAIN);
 
 let N = 96, size = 0, W = 0, H = 0, DPR = 1, RAD = 3;
 let u, v, u0, v0, r, g, b, r0, g0, b0, curlArr;
@@ -253,10 +256,13 @@ function render() {
     for (let i = 1; i <= N; i++) {
       const id = IX(i, j);
       const p = ((j - 1) * N + (i - 1)) * 4;
-      let R = BG.r + r[id] * K; if (R > 255) R = 255;
-      let G = BG.g + g[id] * K; if (G > 255) G = 255;
-      let B = BG.b + b[id] * K; if (B > 255) B = 255;
-      img[p] = R; img[p + 1] = G; img[p + 2] = B; img[p + 3] = 255;
+      let kr = r[id] * 100; kr = kr > 512 ? 512 : (kr < 0 ? 0 : kr);
+      let kg = g[id] * 100; kg = kg > 512 ? 512 : (kg < 0 ? 0 : kg);
+      let kb = b[id] * 100; kb = kb > 512 ? 512 : (kb < 0 ? 0 : kb);
+      img[p]     = BG.r + (255 - BG.r) * SAT[kr | 0];
+      img[p + 1] = BG.g + (255 - BG.g) * SAT[kg | 0];
+      img[p + 2] = BG.b + (255 - BG.b) * SAT[kb | 0];
+      img[p + 3] = 255;
     }
   octx.putImageData(imgData, 0, 0);
   ctx.imageSmoothingEnabled = true;
