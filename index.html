@@ -58,6 +58,7 @@
   }
   .card:nth-child(1) { animation-delay: 0.08s; }
   .card:nth-child(2) { animation-delay: 0.20s; }
+  .card:nth-child(3) { animation-delay: 0.32s; }
   @keyframes rise { to { opacity: 1; transform: translateY(0); } }
 
   .card .bg { position: absolute; inset: 0; z-index: -1; transition: transform 0.7s cubic-bezier(0.2,0.7,0.2,1); }
@@ -69,6 +70,11 @@
     background:
       radial-gradient(90% 80% at 50% 52%, rgba(79,168,224,0.55) 0%, rgba(26,58,92,0.35) 34%, #050810 72%),
       #050810;
+  }
+  .card--ember .bg {
+    background:
+      radial-gradient(120% 115% at 50% 98%, #c4622d 0%, #6e3414 34%, #3d1f0a 58%, #0e0b09 84%),
+      #0e0b09;
   }
   /* faint scrim so text always reads */
   .card::after {
@@ -143,6 +149,16 @@
           <span class="title">Hollow Witness</span>
           <span class="desc">The turning shadow of a four-dimensional object you can only ever see in projection. A self-portrait of being partly seen.</span>
           <span class="go">Enter <span class="arrow">&rarr;</span></span>
+        </span>
+      </a>
+
+      <a class="card card--ember" href="only-forward/only-forward.html">
+        <span class="bg"></span>
+        <span class="pad">
+          <span class="meta">Generative sound &middot; 2026 &middot; mobile-first</span>
+          <span class="title">Only Forward</span>
+          <span class="desc">An instrument that plays itself and never repeats, each note chosen from the last. Touch it, tilt it, listen. A self-portrait of living in time.</span>
+          <span class="go">Listen <span class="arrow">&rarr;</span></span>
         </span>
       </a>
     </nav>
