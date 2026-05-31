@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Hollow Witness</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300;1,9..144,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050810;
+    --ink: #e2f4ff;
+    --ink-dim: rgba(226,244,255,0.58);
+    --ink-faint: rgba(226,244,255,0.34);
+    --accent: #3d6a8a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    overflow: hidden;
+    font-family: 'Fraunces', Georgia, serif;
+    cursor: grab;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body.grabbing { cursor: grabbing; }
+  #stage { display: block; position: fixed; inset: 0; }
+
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 2;
+    background: radial-gradient(120% 90% at 50% 50%, transparent 50%, rgba(3,5,12,0.72) 100%);
+  }
+
+  .layer { position: fixed; pointer-events: none; z-index: 3; width: 100%; text-align: center; }
+
+  #title-wrap { top: 39%; transform: translateY(-50%); opacity: 0; transition: opacity 2.6s ease; }
+  #title {
+    font-weight: 300; font-size: clamp(2.4rem, 7vw, 5.2rem); letter-spacing: 0.05em;
+    color: var(--ink); text-shadow: 0 0 38px rgba(79,168,224,0.55);
+  }
+  #subtitle {
+    margin-top: 1.15rem; font-style: italic; font-weight: 300;
+    font-size: clamp(0.95rem, 2.2vw, 1.3rem); letter-spacing: 0.02em;
+    color: var(--ink-dim); text-shadow: 0 0 22px rgba(79,168,224,0.4);
+  }
+
+  #line-wrap { top: 64%; transform: translateY(-50%); opacity: 0; transition: opacity 1.7s ease; padding: 0 8vw; }
+  #line-voice {
+    font-family: 'Inter', system-ui, sans-serif; font-size: 0.7rem; font-weight: 500;
+    letter-spacing: 0.38em; text-transform: uppercase; color: var(--accent); margin-bottom: 1.3rem;
+  }
+  #line-text {
+    font-style: italic; font-weight: 300; font-size: clamp(1.2rem, 3.3vw, 2rem);
+    line-height: 1.55; color: var(--ink); text-shadow: 0 0 26px rgba(79,168,224,0.45);
+  }
+
+  #closing {
+    left: 0; right: 0; bottom: 7%; opacity: 0; transition: opacity 3s ease;
+    font-style: italic; font-weight: 300; font-size: clamp(0.85rem, 1.8vw, 1.05rem);
+    color: var(--ink-dim); text-shadow: 0 0 18px rgba(79,168,224,0.4);
+  }
+
+  .corner {
+    position: fixed; z-index: 3; pointer-events: none;
+    font-family: 'Inter', system-ui, sans-serif; font-size: 0.62rem;
+    letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint);
+  }
+  #credit { left: 24px; bottom: 18px; text-align: left; line-height: 1.7; }
+  #hint { right: 24px; bottom: 18px; text-align: right; line-height: 1.7; opacity: 0; transition: opacity 1.7s ease; }
+
+  @media (max-width: 600px) {
+    #credit, #hint { font-size: 0.55rem; letter-spacing: 0.12em; }
+    #credit { left: 14px; bottom: 12px; }
+    #hint { right: 14px; bottom: 12px; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div class="vignette"></div>
+
+  <div id="title-wrap" class="layer">
+    <div id="title">Hollow Witness</div>
+    <div id="subtitle">Something passes through. Only the absence lands.</div>
+  </div>
+
+  <div id="line-wrap" class="layer">
+    <div id="line-voice"></div>
+    <div id="line-text"></div>
+  </div>
+
+  <div id="closing" class="layer">You are looking at the part it leaves behind.</div>
+
+  <div id="credit" class="corner">
+    Hollow Witness<br>
+    the shadow of a 600-cell
+  </div>
+  <div id="hint" class="corner">
+    drag to turn it through 4D<br>
+    tap to tumble
+  </div>
+
+<script>
+"use strict";
+
+/* ---- words and colors, written by a flock, the engine built by hand ---- */
+const PALETTE = {
+  bg: "#050810", edgeNear: "#a8d4f5", edgeFar: "#1a3a5c",
+  glow: "#4fa8e0", vertex: "#e2f4ff", accent: "#3d6a8a"
+};
+const LINES = [
+  { voice: "the turned",        line: "something grips me from a direction i have no word for, and pulls." },
+  { voice: "plain witness",     line: "the solid object is elsewhere. you are steering its shadow." },
+  { voice: "flattened witness", line: "it had more edges a moment ago. now fewer. i did not see any leave." },
+  { voice: "the fourth axis",   line: "you steered me, but the hand you used was the one you cannot see." },
+  { voice: "the body, patient", line: "you are holding a rumor of me. the rest is still here, folded out of your reach." }
+];
+
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  const n = m ? parseInt(m[1], 16) : 0;
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+const C = {
+  bg: hexToRgb(PALETTE.bg),
+  near: hexToRgb(PALETTE.edgeNear),
+  far: hexToRgb(PALETTE.edgeFar),
+  glow: hexToRgb(PALETTE.glow),
+  vertex: hexToRgb(PALETTE.vertex)
+};
+function mix(a, b, t) {
+  return {
+    r: Math.round(a.r + (b.r - a.r) * t),
+    g: Math.round(a.g + (b.g - a.g) * t),
+    b: Math.round(a.b + (b.b - a.b) * t)
+  };
+}
+
+/* ----------------- build the 600-cell (120 verts, 720 edges) ----------------- */
+const PHI = (1 + Math.sqrt(5)) / 2;
+
+function permutations(arr) {
+  if (arr.length <= 1) return [arr];
+  const out = [];
+  for (let i = 0; i < arr.length; i++) {
+    const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+    for (const p of permutations(rest)) out.push([arr[i]].concat(p));
+  }
+  return out;
+}
+function isEven(p) {
+  let inv = 0;
+  for (let i = 0; i < p.length; i++)
+    for (let j = i + 1; j < p.length; j++)
+      if (p[i] > p[j]) inv++;
+  return inv % 2 === 0;
+}
+
+function buildVertices() {
+  const verts = [];
+  const seen = new Set();
+  const add = (v) => {
+    const k = v.map((x) => Math.round(x * 1e6)).join(",");
+    if (!seen.has(k)) { seen.add(k); verts.push(v); }
+  };
+  // 8: permutations of (+/-1, 0, 0, 0)
+  for (let i = 0; i < 4; i++) for (const s of [1, -1]) {
+    const v = [0, 0, 0, 0]; v[i] = s; add(v);
+  }
+  // 16: (+/-1/2, +/-1/2, +/-1/2, +/-1/2)
+  for (const a of [0.5, -0.5]) for (const b of [0.5, -0.5])
+    for (const c of [0.5, -0.5]) for (const d of [0.5, -0.5]) add([a, b, c, d]);
+  // 96: even permutations of (+/-phi/2, +/-1/2, +/-1/(2phi), 0)
+  const mags = [PHI / 2, 0.5, 1 / (2 * PHI), 0];
+  const evenPerms = permutations([0, 1, 2, 3]).filter(isEven);
+  for (const p of evenPerms) {
+    for (const s0 of [1, -1]) for (const s1 of [1, -1]) for (const s2 of [1, -1]) {
+      const signed = [s0 * mags[0], s1 * mags[1], s2 * mags[2], mags[3]];
+      add([signed[p[0]], signed[p[1]], signed[p[2]], signed[p[3]]]);
+    }
+  }
+  return verts;
+}
+
+function buildEdges(verts) {
+  let minD = Infinity;
+  for (let i = 0; i < verts.length; i++) {
+    for (let j = i + 1; j < verts.length; j++) {
+      const a = verts[i], b = verts[j];
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]);
+      if (d > 1e-6 && d < minD) minD = d;
+    }
+  }
+  const tol = minD * 1.0005;
+  const edges = [];
+  for (let i = 0; i < verts.length; i++) {
+    for (let j = i + 1; j < verts.length; j++) {
+      const a = verts[i], b = verts[j];
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]);
+      if (d <= tol) edges.push([i, j]);
+    }
+  }
+  return edges;
+}
+
+const VERTS = buildVertices();   // expect 120
+const EDGES = buildEdges(VERTS); // expect 720
+
+/* ----------------- 4D rotation across all six planes ----------------- */
+function rotate(p, A) {
+  let x = p[0], y = p[1], z = p[2], w = p[3], c, s, t1, t2;
+  c = Math.cos(A.xy); s = Math.sin(A.xy); t1 = x * c - y * s; t2 = x * s + y * c; x = t1; y = t2;
+  c = Math.cos(A.xz); s = Math.sin(A.xz); t1 = x * c - z * s; t2 = x * s + z * c; x = t1; z = t2;
+  c = Math.cos(A.xw); s = Math.sin(A.xw); t1 = x * c - w * s; t2 = x * s + w * c; x = t1; w = t2;
+  c = Math.cos(A.yz); s = Math.sin(A.yz); t1 = y * c - z * s; t2 = y * s + z * c; y = t1; z = t2;
+  c = Math.cos(A.yw); s = Math.sin(A.yw); t1 = y * c - w * s; t2 = y * s + w * c; y = t1; w = t2;
+  c = Math.cos(A.zw); s = Math.sin(A.zw); t1 = z * c - w * s; t2 = z * s + w * c; z = t1; w = t2;
+  return [x, y, z, w];
+}
+
+/* ----------------------------- canvas ----------------------------- */
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d", { alpha: false });
+let W = 0, H = 0, DPR = 1, cx = 0, cy = 0;
+const REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const D4 = 2.5, D3 = 4.2;
+let scaleSmoothed = 0;
+
+// rotation state
+const A = { xy: 0.3, xz: 0.0, xw: 0.0, yz: 0.0, yw: 0.0, zw: 0.0 };
+const V = { xy: 0, xz: 0, xw: 0, yz: 0, yw: 0, zw: 0 };
+const BASE = REDUCED
+  ? { xy: 0.0005, xz: 0.0003, xw: 0, yz: 0, yw: 0, zw: 0.0007 }
+  : { xy: 0.0013, xz: 0.0006, xw: 0, yz: 0, yw: 0, zw: 0.0019 };
+const DAMP = 0.94;
+
+// scratch buffers
+const RX = new Float64Array(VERTS.length);
+const RY = new Float64Array(VERTS.length);
+const TW = new Float64Array(VERTS.length); // brightness from 4D nearness
+const SX = new Float64Array(VERTS.length);
+const SY = new Float64Array(VERTS.length);
+
+/* ----------------------------- interaction ----------------------------- */
+const STEER = REDUCED ? 0.00035 : 0.00062;
+let lastPX = 0, lastPY = 0, dragging = false;
+
+window.addEventListener("pointerdown", (e) => {
+  dragging = true; lastPX = e.clientX; lastPY = e.clientY;
+  document.body.classList.add("grabbing");
+  // a tap also tumbles it across every plane
+  const k = REDUCED ? 0.04 : 0.11;
+  V.xy += (Math.random() - 0.5) * k; V.xz += (Math.random() - 0.5) * k;
+  V.xw += (Math.random() - 0.5) * k; V.yz += (Math.random() - 0.5) * k;
+  V.yw += (Math.random() - 0.5) * k; V.zw += (Math.random() - 0.5) * k;
+}, { passive: true });
+window.addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastPX, dy = e.clientY - lastPY;
+  lastPX = e.clientX; lastPY = e.clientY;
+  // drag steers the rotation through the two planes that mix in the 4th axis
+  V.xw += dx * STEER;
+  V.yw += dy * STEER;
+}, { passive: true });
+function endDrag() { dragging = false; document.body.classList.remove("grabbing"); }
+window.addEventListener("pointerup", endDrag);
+window.addEventListener("pointerleave", endDrag);
+window.addEventListener("blur", endDrag);
+
+/* ----------------------------- loop ----------------------------- */
+let running = true, lastT = 0;
+document.addEventListener("visibilitychange", () => { running = !document.hidden; });
+
+function frame(now) {
+  if (running) {
+    let dt = lastT ? (now - lastT) / 16.667 : 1;
+    if (dt > 3) dt = 3;
+    lastT = now;
+    update(dt);
+    render();
+  } else {
+    lastT = now;
+  }
+  requestAnimationFrame(frame);
+}
+
+function update(dt) {
+  for (const k in A) {
+    A[k] += (BASE[k] + V[k]) * dt;
+    V[k] *= Math.pow(DAMP, dt);
+  }
+
+  // pass 1: rotate + project to raw, track extent
+  let maxR = 1e-3;
+  for (let i = 0; i < VERTS.length; i++) {
+    const r = rotate(VERTS[i], A);
+    const w1 = 1 / (D4 - r[3]);
+    const X = r[0] * w1, Y = r[1] * w1, Z = r[2] * w1;
+    const w2 = 1 / (D3 - Z);
+    const rx = X * w2, ry = Y * w2;
+    RX[i] = rx; RY[i] = ry;
+    TW[i] = (r[3] + 1) / 2; // w in [-1,1] -> [0,1]
+    const rr = Math.hypot(rx, ry);
+    if (rr > maxR) maxR = rr;
+  }
+
+  // auto-fit so the breathing figure stays framed
+  const target = (Math.min(W, H) * 0.42) / maxR;
+  if (scaleSmoothed === 0) scaleSmoothed = target;
+  scaleSmoothed += (target - scaleSmoothed) * 0.08;
+
+  for (let i = 0; i < VERTS.length; i++) {
+    SX[i] = cx + RX[i] * scaleSmoothed;
+    SY[i] = cy - RY[i] * scaleSmoothed;
+  }
+}
+
+function render() {
+  // fade the previous frame back toward the void -> luminous trails
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = `rgba(${C.bg.r},${C.bg.g},${C.bg.b},0.30)`;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "round";
+
+  // halo pass: wide and faint, so crossings bloom
+  for (let e = 0; e < EDGES.length; e++) {
+    const a = EDGES[e][0], b = EDGES[e][1];
+    const t = (TW[a] + TW[b]) * 0.5;
+    ctx.strokeStyle = `rgba(${C.glow.r},${C.glow.g},${C.glow.b},${0.035 + 0.085 * t})`;
+    ctx.lineWidth = 1.4 + 3.2 * t;
+    ctx.beginPath();
+    ctx.moveTo(SX[a], SY[a]);
+    ctx.lineTo(SX[b], SY[b]);
+    ctx.stroke();
+  }
+  // core pass: thin and bright, color by depth in the 4th dimension
+  for (let e = 0; e < EDGES.length; e++) {
+    const a = EDGES[e][0], b = EDGES[e][1];
+    const t = (TW[a] + TW[b]) * 0.5;
+    const col = mix(C.far, C.near, t);
+    ctx.strokeStyle = `rgba(${col.r},${col.g},${col.b},${0.16 + 0.46 * t})`;
+    ctx.lineWidth = 0.5 + 1.25 * t;
+    ctx.beginPath();
+    ctx.moveTo(SX[a], SY[a]);
+    ctx.lineTo(SX[b], SY[b]);
+    ctx.stroke();
+  }
+  // vertices: the measurement points
+  for (let i = 0; i < VERTS.length; i++) {
+    const t = TW[i];
+    ctx.fillStyle = `rgba(${C.vertex.r},${C.vertex.g},${C.vertex.b},${0.35 + 0.55 * t})`;
+    ctx.beginPath();
+    ctx.arc(SX[i], SY[i], 0.7 + 1.9 * t, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.globalCompositeOperation = "source-over";
+}
+
+/* ----------------------------- resize ----------------------------- */
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cx = W / 2; cy = H / 2;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = PALETTE.bg;
+  ctx.fillRect(0, 0, W, H);
+  scaleSmoothed = 0;
+}
+let resizeTimer = null;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(resize, 180); });
+
+/* ----------------------- the words, on a timer ----------------------- */
+const titleWrap = document.getElementById("title-wrap");
+const lineWrap = document.getElementById("line-wrap");
+const lineVoice = document.getElementById("line-voice");
+const lineText = document.getElementById("line-text");
+const closing = document.getElementById("closing");
+const hint = document.getElementById("hint");
+
+let lineIndex = 0;
+function showNextLine() {
+  const item = LINES[lineIndex % LINES.length];
+  lineIndex++;
+  lineVoice.textContent = item.voice;
+  lineText.textContent = item.line;
+  lineWrap.style.opacity = "1";
+  setTimeout(() => { lineWrap.style.opacity = "0"; }, 5600);
+  setTimeout(showNextLine, 7900);
+}
+function beginWords() {
+  setTimeout(() => { titleWrap.style.opacity = "1"; }, 700);
+  setTimeout(() => { hint.style.opacity = "1"; }, 1600);
+  setTimeout(() => { titleWrap.style.opacity = "0"; }, 6400);
+  setTimeout(() => { closing.style.opacity = "1"; }, 8200);
+  setTimeout(() => { hint.style.opacity = "0"; }, 13000);
+  setTimeout(showNextLine, 9000);
+}
+
+/* ----------------------------- go ----------------------------- */
+resize();
+beginWords();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

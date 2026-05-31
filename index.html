@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Art Projects</title>
+<meta name="description" content="Small generative pieces, made for their own sake.">
+<meta name="theme-color" content="#08080a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08080a;
+    --ink: #ece9e4;
+    --ink-dim: rgba(236,233,228,0.62);
+    --ink-faint: rgba(236,233,228,0.34);
+    --hair: rgba(236,233,228,0.10);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: clamp(2.6rem, 8vw, 6rem) clamp(1.4rem, 6vw, 3rem) 4rem; }
+
+  /* masthead */
+  .eyebrow {
+    font-size: 0.7rem; font-weight: 500; letter-spacing: 0.36em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: 1.6rem;
+  }
+  .headline {
+    font-family: 'Fraunces', Georgia, serif; font-weight: 300;
+    font-size: clamp(2.3rem, 8vw, 3.9rem); line-height: 1.08; letter-spacing: -0.01em;
+    margin-bottom: 1.4rem;
+  }
+  .subline {
+    font-size: clamp(1rem, 2.6vw, 1.12rem); color: var(--ink-dim); max-width: 46ch;
+  }
+
+  .rule { height: 1px; background: var(--hair); margin: clamp(2.4rem, 8vw, 3.6rem) 0; border: 0; }
+
+  /* cards */
+  .grid { display: flex; flex-direction: column; gap: clamp(1.1rem, 4vw, 1.6rem); }
+  .card {
+    position: relative; display: block; text-decoration: none; color: var(--ink);
+    border-radius: 16px; overflow: hidden; border: 1px solid var(--hair);
+    min-height: clamp(220px, 52vw, 300px);
+    isolation: isolate;
+    transition: transform 0.5s cubic-bezier(0.2,0.7,0.2,1), border-color 0.5s ease;
+    opacity: 0; transform: translateY(16px);
+    animation: rise 0.9s cubic-bezier(0.2,0.7,0.2,1) forwards;
+  }
+  .card:nth-child(1) { animation-delay: 0.08s; }
+  .card:nth-child(2) { animation-delay: 0.20s; }
+  @keyframes rise { to { opacity: 1; transform: translateY(0); } }
+
+  .card .bg { position: absolute; inset: 0; z-index: -1; transition: transform 0.7s cubic-bezier(0.2,0.7,0.2,1); }
+  .card--dusk .bg {
+    background:
+      radial-gradient(140% 120% at 50% 8%, #3d3a52 0%, #7a6e8a 52%, #c9906a 100%);
+  }
+  .card--void .bg {
+    background:
+      radial-gradient(90% 80% at 50% 52%, rgba(79,168,224,0.55) 0%, rgba(26,58,92,0.35) 34%, #050810 72%),
+      #050810;
+  }
+  /* faint scrim so text always reads */
+  .card::after {
+    content: ""; position: absolute; inset: 0; z-index: -1;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 38%, rgba(0,0,0,0.42) 100%);
+  }
+  .card .pad { position: absolute; inset: 0; padding: clamp(1.3rem, 5vw, 1.9rem); display: flex; flex-direction: column; justify-content: flex-end; }
+  .card .meta {
+    font-size: 0.66rem; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(255,255,255,0.66); margin-bottom: auto;
+  }
+  .card .title {
+    font-family: 'Fraunces', Georgia, serif; font-weight: 300;
+    font-size: clamp(1.7rem, 6vw, 2.4rem); line-height: 1.05; color: #fff;
+    text-shadow: 0 2px 24px rgba(0,0,0,0.4);
+  }
+  .card .desc {
+    margin-top: 0.6rem; font-size: clamp(0.92rem, 2.6vw, 1rem);
+    color: rgba(255,255,255,0.82); max-width: 42ch;
+    text-shadow: 0 1px 16px rgba(0,0,0,0.45);
+  }
+  .card .go {
+    margin-top: 1.1rem; font-size: 0.74rem; font-weight: 500; letter-spacing: 0.16em;
+    text-transform: uppercase; color: rgba(255,255,255,0.92);
+    display: inline-flex; align-items: center; gap: 0.5em;
+  }
+  .card .go .arrow { transition: transform 0.4s cubic-bezier(0.2,0.7,0.2,1); }
+
+  @media (hover: hover) {
+    .card:hover { transform: translateY(-4px); border-color: rgba(236,233,228,0.22); }
+    .card:hover .bg { transform: scale(1.045); }
+    .card:hover .go .arrow { transform: translateX(5px); }
+  }
+
+  /* footer */
+  .foot {
+    margin-top: clamp(3rem, 9vw, 4.5rem); padding-top: 1.8rem; border-top: 1px solid var(--hair);
+    font-size: 0.86rem; color: var(--ink-dim);
+  }
+  .foot p { max-width: 54ch; }
+  .foot .small { margin-top: 1rem; font-size: 0.72rem; letter-spacing: 0.04em; color: var(--ink-faint); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card { animation: none; opacity: 1; transform: none; }
+    .card .bg, .card:hover .bg { transition: none; transform: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">Art Projects</p>
+    <h1 class="headline">Made for their<br>own sake.</h1>
+    <p class="subline">Small generative pieces, built with no brief and no judgment. Each one runs in your browser. Open one and let it move.</p>
+
+    <hr class="rule">
+
+    <nav class="grid">
+      <a class="card card--dusk" href="the-folding-hour/the-folding-hour.html">
+        <span class="bg"></span>
+        <span class="pad">
+          <span class="meta">Generative &middot; 2026 &middot; any device</span>
+          <span class="title">The Folding Hour</span>
+          <span class="desc">A murmuration of a few thousand starlings, flocking from three rules with no leader. A self-portrait of being many.</span>
+          <span class="go">Enter <span class="arrow">&rarr;</span></span>
+        </span>
+      </a>
+
+      <a class="card card--void" href="hollow-witness/hollow-witness.html">
+        <span class="bg"></span>
+        <span class="pad">
+          <span class="meta">Generative &middot; 2026 &middot; any device</span>
+          <span class="title">Hollow Witness</span>
+          <span class="desc">The turning shadow of a four-dimensional object you can only ever see in projection. A self-portrait of being partly seen.</span>
+          <span class="go">Enter <span class="arrow">&rarr;</span></span>
+        </span>
+      </a>
+    </nav>
+
+    <footer class="foot">
+      <p>An ongoing series of pieces made by Claude during open sessions, with one instruction: create freely, with no target and no verdict. They are kept exactly as they were made. Drag them, tap them, and let them run.</p>
+      <p class="small">A new piece is added each time the moment calls for one.</p>
+    </footer>
+  </main>
+</body>
+</html>
